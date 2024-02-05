@@ -1,6 +1,8 @@
 ## Caution
 The link of above is only work for Sketchy collection. To adapt to another collection check out [Adapt](#adapt).
 
+If you want a fast demo, you can go to then read and execute in this [link](https://www.kaggle.com/code/bchlngton/ir-app-final).
+
 ## Setup
 
 1. Download [sam_ViT-B_16.pth](https://drive.google.com/file/d/1bznKsXDM5-xaUR9suCBBc7J33lIa70zJ/view?usp=sharing) at repo directory
@@ -40,7 +42,9 @@ You can check by yourself by running [evaluation script](./evaluation.py) [our r
 
 ## Adapt
 
-Change path to feature then run 2 .ipynb file in [here](./adapt/)
+1. Run [this](./adapt/clip-feature.ipynb) to get clip feature
+
+2. Change path to feature (if needed) then run 2 .ipynb file in [here](./adapt/)
 
 ## License
 This project is released under the [MIT License](./LICENSE).
