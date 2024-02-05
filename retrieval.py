@@ -1,6 +1,7 @@
 import os
 import sys
 import cv2
+
 import random
 import colorsys
 from io import BytesIO
@@ -16,6 +17,7 @@ import torch.nn as nn
 import torchvision
 from torchvision import transforms as pth_transforms
 import numpy as np
+import pandas as pd
 from PIL import Image
 
 from utils.util import setup_seed, load_checkpoint
@@ -23,38 +25,6 @@ import utils.visualize_utils
 from options import Option
 from model.model import Model
 from data_utils.utils import preprocess
-
-
-
-# def sa_sk_feature(args, path):
-
-#     # prepare model
-#     model = Model(args)
-#     model = model.half()
-
-#     if args.load is not None:
-#         checkpoint = load_checkpoint(args.load)
-
-#     cur = model.state_dict()
-#     new = {k: v for k, v in checkpoint['model'].items() if k in cur.keys()}
-#     cur.update(new)
-#     model.load_state_dict(cur)
-
-#     if len(args.choose_cuda) > 1:
-#         model = torch.nn.parallel.DataParallel(model.to('cuda'))
-#     model = model.cuda()
-#     model.eval()
-#     torch.set_grad_enabled(False)
-
-
-#     #extract sketch features
-#     sketch = preprocess(path, 'sk').half()
-
-#     sketch = sketch.unsqueeze(0).cuda()
-
-#     sk, sk_idx = model(sketch, None, 'test', only_sa = True)
-
-#     return sk
 
 def plot_result(query, top, path): 
     top = top[:5]
@@ -77,7 +47,7 @@ def plot_result(query, top, path):
   
     fig.savefig(path)
 
-def retrieve(device, query=None, gallery='Sketchy', model=None, lite=True, args=None, path=None, k=16):
+def retrieve(device, embeded, df, centroid_feats, query=None, gallery='Sketchy', model=None, lite=False, args=None, path=None, k=16, t = 1):
 
     if query is None:
         raise ValueError("Please provide query image (path)!")
@@ -93,44 +63,42 @@ def retrieve(device, query=None, gallery='Sketchy', model=None, lite=True, args=
 
     if gallery == 'TUBerlin':
         gallery_path = os.path.join(args.data_path, "TUBerlin", "ImageResized_ready")
-        feature_path = os.path.join(args.data_path, "TUBerlin", "256x256", "sa_features")
     elif gallery == 'Sketchy':
-        gallery_path = os.path.join(args.data_path, "Sketchy", "EXTEND_image_sketchy_ready")
-        feature_path = os.path.join(args.data_path, "Sketchy", "256x256", "sa_features")
+        gallery_path = os.path.join(args.data_path, "Sketchy", "256x256", "photo", "tx_000000000000_ready")
     else:
         raise ValueError("Not Implement yet!")
-
     
-
-    category_list = os.listdir(feature_path)
-    for folder in category_list:
-        category_path = os.path.join(feature_path, folder)
-        feature_list = os.listdir(category_path)
-        
-        if lite:
-            len_retrieval = 5
-        else:
-            len_retrieval = len(feature_list)
-        
-        category_feature = []
-
-        for feature_file in feature_list[:len_retrieval]:
-            img_feature = torch.from_numpy(np.load(os.path.join(category_path, feature_file)))
-
-            category_feature.append(img_feature)
-            path_to_img.append(os.path.join(gallery_path, folder, feature_file[:-4]))
-
-        category_feature = torch.stack(category_feature, dim=0)
-        _ , score = model(sk.repeat(len(category_feature), 1, 1), category_feature.to(device), 'test')
-        scores = np.append(scores, score.cpu().numpy())
+    # calculate relevance between sketch and clusters 
+    _ , centroid_scores = model(sk.repeat(len(centroid_feats), 1, 1), centroid_feats, 'test')
+    centroid_scores = np.squeeze(centroid_scores.cpu().numpy())
     
-    # scores = np.array(scores)
-    path_to_img = np.array(path_to_img)
+    cluster_idx = np.argsort(centroid_scores)
+    
+    pos = -1
+    
+    index = df.index[df['cluster_idx']==cluster_idx[pos]]
+    
+    while len(index) < k:
+        pos -= 1
+        index = index.union(df.index[df['cluster_idx'] == cluster_idx[pos]])
+        
+    img_name = df.iloc[index]['image_name'].to_numpy()
+    category_name = df.iloc[index]['class'].to_numpy()
+    
+    img_feats = torch.from_numpy(np.array([embeded[name] for name in img_name]))
 
-    top_k = path_to_img[scores.argsort()[-1:-k-1:-1]]
+    _ , score = model(sk.repeat(len(img_feats), 1, 1), img_feats.to(device), 'test')
 
-    plot_result(query, top_k, path)
-    return top_k
+    score = np.squeeze(score.cpu().numpy())
+
+    top_k_index = score.argsort()[::-1][:k]
+    top_k_name = img_name[top_k_index]
+    top_k_category = category_name[top_k_index]
+    
+    #plot_result(query, top_k, path)
+    res = [os.path.join(gallery_path, top_k_category[idx], top_k_name[idx][:-4]) for idx in range(k)]
+    print('res:',res)
+    return res
   
 
 
@@ -154,5 +122,3 @@ if __name__ == '__main__':
         raise ImportError("Pre-trained weigths not found!")
 
     retrieve(device=device, query=args.sketch_path, gallery="Sketchy", model=model, args=args)
-
-
