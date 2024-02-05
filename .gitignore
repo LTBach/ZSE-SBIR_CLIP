@@ -1,0 +1,19 @@
+# python cache
+__pycache__/
+
+# ViT checkpoint
+sam_ViT-B_16.pth
+
+# temporary folder when use app
+tmp/
+sketchs/
+output/
+
+# Dataset and feature
+Sketchy.tar.gz
+datasets/Sketchy/EXTEND_image_sketchy_ready/
+datasets/Sketchy/256x256/
+
+# checkpoint of model
+checkpoint
+storage
